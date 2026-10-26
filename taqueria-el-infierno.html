@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#150a04">
+<title>Taquería El Infierno | Menú Digital</title>
+<meta name="description" content="Menú digital interactivo de Taquería El Infierno — pide tus tacos y recíbelos en la puerta de tu casa.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔥</text></svg>">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://images.unsplash.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Work+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          void: '#150a04',
+          char: '#241208',
+          charlight: '#331a0d',
+          ember: '#E23E1B',
+          blaze: '#FF7A1A',
+          gold: '#F4B740',
+          cream: '#FBEFE0',
+        },
+        fontFamily: {
+          display: ['"Bebas Neue"', 'sans-serif'],
+          body: ['"Work Sans"', 'sans-serif'],
+        },
+      },
+    },
+  };
+</script>
+
+<style>
+  * { -webkit-tap-highlight-color: transparent; }
+  html, body { background:#150a04; }
+  body { font-family: 'Work Sans', sans-serif; }
+  .font-display { font-family: 'Bebas Neue', sans-serif; letter-spacing: 0.04em; }
+
+  /* ---- chispas / brasas flotantes en la cabecera ---- */
+  .spark {
+    position: absolute;
+    bottom: -10px;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: radial-gradient(circle, #FFE1A8 0%, #FF7A1A 55%, transparent 80%);
+    animation: spark-rise linear infinite;
+    opacity: 0;
+  }
+  @keyframes spark-rise {
+    0%   { transform: translateY(0) translateX(0) scale(1); opacity: 0; }
+    12%  { opacity: 1; }
+    100% { transform: translateY(-170px) translateX(var(--drift, 12px)) scale(.25); opacity: 0; }
+  }
+
+  /* ---- scrollbar oculto para los chips de categoría ---- */
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+  /* ---- tarjeta de producto ---- */
+  .product-card {
+    background: linear-gradient(180deg, #241208 0%, #1b0d06 100%);
+    border: 1px solid rgba(244,183,64,0.08);
+  }
+  .product-card img { transition: transform .5s ease; }
+  .product-card:active img { transform: scale(1.04); }
+
+  /* ---- botón flotante de carrito ---- */
+  #cart-bar {
+    transition: transform .35s cubic-bezier(.34,1.56,.64,1), opacity .3s ease;
+  }
+  #cart-bar.cart-hidden {
+    transform: translateY(140%);
+    opacity: 0;
+    pointer-events: none;
+  }
+  @keyframes bump { 0%{transform:scale(1)} 35%{transform:scale(1.06)} 100%{transform:scale(1)} }
+  .bump { animation: bump .28s ease; }
+
+  /* ---- hoja inferior del carrito ---- */
+  #cart-sheet {
+    transition: transform .38s cubic-bezier(.32,.72,0,1);
+    transform: translateY(100%);
+  }
+  #cart-overlay {
+    transition: opacity .3s ease;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  /* CLAVE DEL FIX: #cart-modal es "fixed inset-0" (cubre toda la pantalla) y
+     estaba SIEMPRE presente en el documento, incluso cerrado. Sin esta regla,
+     esa capa invisible tapaba los clics de TODO lo que hay debajo (botones +/-,
+     chips de categoría, el propio botón flotante del carrito). Por eso nada
+     respondía. Con pointer-events:none la capa deja pasar los clics cuando
+     está cerrada, y solo los captura cuando se le agrega la clase "open". */
+  #cart-modal {
+    pointer-events: none;
+  }
+  #cart-modal.open {
+    pointer-events: auto;
+  }
+  #cart-modal.open #cart-overlay { opacity: 1; pointer-events: auto; }
+  #cart-modal.open #cart-sheet { transform: translateY(0); }
+
+  .pay-chip.active {
+    background: linear-gradient(135deg, #E23E1B, #F4B740);
+    color: #150a04;
+    border-color: transparent;
+  }
+
+  .cat-chip.active {
+    background: linear-gradient(135deg, #E23E1B, #FF7A1A 60%, #F4B740);
+    color: #150a04;
+    box-shadow: 0 0 18px rgba(226,62,27,.45);
+  }
+
+  input:focus, textarea:focus, button:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px #F4B740;
+  }
+
+  @keyframes shake {
+    10%,90% { transform: translateX(-1px); }
+    20%,80% { transform: translateX(2px); }
+    30%,50%,70% { transform: translateX(-4px); }
+    40%,60% { transform: translateX(4px); }
+  }
+  .shake { animation: shake .5s; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .spark { animation: none; display: none; }
+    #cart-bar, #cart-sheet, #cart-overlay, .product-card img { transition: none !important; }
+  }
+</style>
+</head>
+
+<body class="bg-void text-cream font-body min-h-screen">
+
+  <div class="max-w-md mx-auto relative min-h-screen bg-void">
+
+    <!-- ============ CABECERA ============ -->
+    <header class="relative overflow-hidden px-6 pt-10 pb-8 text-center"
+      style="background: radial-gradient(120% 90% at 50% -10%, #3a1206 0%, #1b0b04 55%, #150a04 100%);">
+
+      <!-- chispas flotantes -->
+      <span class="spark" style="left:12%; --drift:8px;  animation-duration:3.2s; animation-delay:.1s;"></span>
+      <span class="spark" style="left:24%; --drift:-14px; animation-duration:4.1s; animation-delay:1.1s;"></span>
+      <span class="spark" style="left:38%; --drift:10px;  animation-duration:3.6s; animation-delay:.6s;"></span>
+      <span class="spark" style="left:55%; --drift:-6px;  animation-duration:4.6s; animation-delay:1.8s;"></span>
+      <span class="spark" style="left:68%; --drift:14px;  animation-duration:3.9s; animation-delay:.3s;"></span>
+      <span class="spark" style="left:80%; --drift:-10px; animation-duration:3.3s; animation-delay:1.4s;"></span>
+      <span class="spark" style="left:90%; --drift:6px;   animation-duration:4.3s; animation-delay:.9s;"></span>
+
+      <!-- marca / logo -->
+      <div class="relative z-10 flex flex-col items-center">
+        <svg width="46" height="46" viewBox="0 0 24 24" class="mb-2 drop-shadow-[0_0_10px_rgba(255,122,26,0.6)]">
+          <defs>
+            <linearGradient id="flameGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#F4B740"/>
+              <stop offset="55%" stop-color="#FF7A1A"/>
+              <stop offset="100%" stop-color="#E23E1B"/>
+            </linearGradient>
+          </defs>
+          <path fill="url(#flameGrad)" d="M12 2c-1.5 3-5 5.5-5 10a5 5 0 0010 0c0-1.8-.7-2.8-1.2-3.5.1 1.4-.6 2.3-1.3 2.3-.9 0-1.5-.8-1.5-1.8 0-1.6 1.4-2.6 1.4-4.6C14.4 3.3 13 2 12 2z"/>
+        </svg>
+
+        <h1 class="font-display text-5xl leading-none text-cream drop-shadow-[0_2px_6px_rgba(0,0,0,.6)]">
+          TAQUERÍA <span class="bg-gradient-to-r from-gold via-blaze to-ember bg-clip-text text-transparent">EL INFIERNO</span>
+        </h1>
+
+        <!-- divisor "onda de calor" -->
+        <svg class="w-40 h-4 mt-3 mb-3" viewBox="0 0 300 24" preserveAspectRatio="none">
+          <defs>
+            <linearGradient id="waveGrad" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stop-color="#E23E1B"/>
+              <stop offset="50%" stop-color="#FF7A1A"/>
+              <stop offset="100%" stop-color="#F4B740"/>
+            </linearGradient>
+          </defs>
+          <path d="M0 16 Q15 2 30 16 T60 16 T90 16 T120 16 T150 16 T180 16 T210 16 T240 16 T270 16 T300 16"
+            stroke="url(#waveGrad)" stroke-width="3" fill="none" stroke-linecap="round"/>
+        </svg>
+
+        <p class="text-xs tracking-[0.3em] uppercase text-cream/60">El sabor que quema con gusto</p>
+
+        <div class="flex items-center gap-1.5 mt-4 text-sm text-cream/80">
+          <svg class="w-4 h-4 text-gold shrink-0" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M9.69 18.933l.003.001C9.89 19.02 10 19 10 19s.11.02.308-.066l.002-.001.006-.003.018-.008a5.741 5.741 0 00.281-.14c.186-.096.446-.24.757-.433.62-.384 1.445-.966 2.274-1.765C15.302 14.988 17 12.493 17 9A7 7 0 103 9c0 3.492 1.698 5.988 3.355 7.584a13.731 13.731 0 002.273 1.765 11.842 11.842 0 00.976.544l.062.029.018.008.006.003zM10 11.25a2.25 2.25 0 100-4.5 2.25 2.25 0 000 4.5z" clip-rule="evenodd" />
+          </svg>
+          Av. Principal #45, Nicolás Romero
+        </div>
+      </div>
+    </header>
+
+    <!-- ============ CATEGORÍAS ============ -->
+    <nav class="sticky top-0 z-30 bg-void/95 backdrop-blur border-b border-gold/10 px-4 py-3">
+      <div id="category-bar" class="flex gap-2 overflow-x-auto no-scrollbar">
+        <button data-filter="todos" class="cat-chip active shrink-0 px-4 py-2 rounded-full text-xs font-semibold uppercase tracking-wider border border-gold/25 text-cream/80 transition">
+          Todos
+        </button>
+        <button data-filter="tacos" class="cat-chip shrink-0 px-4 py-2 rounded-full text-xs font-semibold uppercase tracking-wider border border-gold/25 text-cream/80 transition">
+          🌮 Tacos
+        </button>
+        <button data-filter="bebidas" class="cat-chip shrink-0 px-4 py-2 rounded-full text-xs font-semibold uppercase tracking-wider border border-gold/25 text-cream/80 transition">
+          🥤 Bebidas
+        </button>
+        <button data-filter="especialidades" class="cat-chip shrink-0 px-4 py-2 rounded-full text-xs font-semibold uppercase tracking-wider border border-gold/25 text-cream/80 transition">
+          🔥 Especialidades
+        </button>
+      </div>
+    </nav>
+
+    <!-- ============ MENÚ ============ -->
+    <main class="px-4 pt-5 pb-32">
+      <p class="text-[11px] uppercase tracking-widest text-gold/70 mb-3 px-1">Precios en MXN</p>
+      <div id="menu-list" class="flex flex-col gap-4"></div>
+    </main>
+
+    <!-- ============ BARRA FLOTANTE DE CARRITO ============ -->
+    <button id="cart-bar" class="cart-hidden fixed bottom-4 left-1/2 -translate-x-1/2 w-[calc(100%-2rem)] max-w-md mx-auto z-40
+      flex items-center justify-between gap-3 rounded-full px-5 py-4
+      bg-gradient-to-r from-ember via-blaze to-gold text-void shadow-[0_10px_30px_rgba(226,62,27,0.45)]">
+      <span class="flex items-center gap-2 font-bold text-sm">
+        <span class="flex items-center justify-center w-6 h-6 rounded-full bg-void text-gold text-xs font-display" id="cart-count">0</span>
+        Ver pedido
+      </span>
+      <span class="font-display text-xl" id="cart-total">$0.00</span>
+    </button>
+
+    <!-- ============ MODAL / HOJA DEL CARRITO ============ -->
+    <div id="cart-modal" class="fixed inset-0 z-50">
+      <div id="cart-overlay" class="absolute inset-0 bg-black/70 backdrop-blur-sm" onclick="closeCart()"></div>
+
+      <div id="cart-sheet" class="absolute bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md
+        bg-char rounded-t-3xl border-t border-gold/20 max-h-[90vh] overflow-y-auto">
+
+        <div class="sticky top-0 bg-char/95 backdrop-blur px-5 pt-4 pb-3 flex items-center justify-between border-b border-gold/10">
+          <h2 class="font-display text-2xl tracking-wide">Tu Pedido 🔥</h2>
+          <button onclick="closeCart()" aria-label="Cerrar carrito" class="w-8 h-8 flex items-center justify-center rounded-full bg-void/60 text-cream/70 hover:text-gold">
+            ✕
+          </button>
+        </div>
+
+        <div class="px-5 py-4">
+          <div id="cart-items" class="flex flex-col gap-2 mb-4"></div>
+
+          <div class="flex items-center justify-between py-3 border-t border-b border-gold/15 mb-5">
+            <span class="font-display text-lg tracking-wide text-cream/80">Total</span>
+            <span class="font-display text-2xl text-gold" id="cart-modal-total">$0.00 MXN</span>
+          </div>
+
+          <form id="delivery-form" class="flex flex-col gap-4" onsubmit="return false;">
+            <div>
+              <label for="input-nombre" class="block text-xs uppercase tracking-wider text-cream/60 mb-1.5">Nombre</label>
+              <input id="input-nombre" type="text" placeholder="¿Cómo te llamas?"
+                class="w-full rounded-xl bg-void border border-gold/20 px-4 py-3 text-sm text-cream placeholder:text-cream/30">
+            </div>
+
+            <div>
+              <label for="input-direccion" class="block text-xs uppercase tracking-wider text-cream/60 mb-1.5">Dirección de entrega</label>
+              <textarea id="input-direccion" rows="2" placeholder="Calle, número, colonia, referencias..."
+                class="w-full rounded-xl bg-void border border-gold/20 px-4 py-3 text-sm text-cream placeholder:text-cream/30 resize-none"></textarea>
+            </div>
+
+            <div>
+              <span class="block text-xs uppercase tracking-wider text-cream/60 mb-1.5">Método de pago</span>
+              <div id="pay-options" class="flex gap-3">
+                <button type="button" data-pay="Efectivo" class="pay-chip active flex-1 rounded-xl border border-gold/25 py-3 text-sm font-semibold text-cream/80 transition">
+                  💵 Efectivo
+                </button>
+                <button type="button" data-pay="Transferencia" class="pay-chip flex-1 rounded-xl border border-gold/25 py-3 text-sm font-semibold text-cream/80 transition">
+                  🏦 Transferencia
+                </button>
+              </div>
+            </div>
+
+            <button type="button" onclick="confirmOrder()"
+              class="mt-2 w-full rounded-full py-4 font-display text-xl tracking-wide text-void
+              bg-gradient-to-r from-gold via-blaze to-ember shadow-[0_8px_24px_rgba(226,62,27,0.4)]
+              active:scale-[.98] transition">
+              Confirmar Pedido por WhatsApp
+            </button>
+            <p class="text-center text-[11px] text-cream/40 pb-2">Se abrirá WhatsApp con tu pedido ya redactado ✅</p>
+          </form>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+<script>
+  /* =========================================================
+     ⚠️ NÚMERO DE WHATSAPP QUE RECIBE LOS PEDIDOS.
+     Formato: código de país + número, SIN "+", SIN espacios ni guiones.
+     Si necesitas cambiarlo más adelante, edita SOLO esta línea.
+  ========================================================= */
+  const WHATSAPP_NUMBER = "525549292718"; // <-- tu número real de pruebas
+
+  // ---------------------------------------------------------
+  // Datos del menú
+  // ---------------------------------------------------------
+  const products = [
+    {
+      id: "pastor",
+      name: "Tacos al Pastor",
+      desc: "Trompo jugoso marinado en achiote, piña asada al carbón, cilantro y cebolla. El clásico que nunca falla.",
+      price: 15,
+      category: "tacos",
+      img: "https://images.unsplash.com/photo-1687881063470-a78e6ea2590e?q=80&w=800&auto=format&fit=crop",
+      alt: "Tacos al pastor con carne, lechuga y salsa en un plato",
+      emoji: "🌮"
+    },
+    {
+      id: "suadero",
+      name: "Tacos de Suadero",
+      desc: "Carne de res cocida a fuego lento hasta quedar suavecita, dorada al comal y servida con salsa verde de la casa.",
+      price: 15,
+      category: "tacos",
+      img: "https://images.unsplash.com/photo-1640983743761-4f0e0204bc58?q=80&w=800&auto=format&fit=crop",
+      alt: "Plato de tacos con un toque de limón",
+      emoji: "🌮"
+    },
+    {
+      id: "bistec",
+      name: "Tacos de Bistec",
+      desc: "Bistec de res a la plancha, jugoso y bien sazonado, con doble tortilla recién hecha y un toque de limón.",
+      price: 16,
+      category: "tacos",
+      img: "https://images.unsplash.com/photo-1760322328049-91bb196d41d9?q=80&w=800&auto=format&fit=crop",
+      alt: "Tacos gourmet con guarniciones variadas sobre tabla de madera",
+      emoji: "🌮"
+    },
+    {
+      id: "volcan",
+      name: "Volcán de Queso",
+      desc: "Queso Oaxaca burbujeando directo del comal con chorizo dorado, listo para armar en tortilla recién hecha.",
+      price: 35,
+      category: "especialidades",
+      img: "https://images.unsplash.com/photo-1673990349292-ed2dfa7988c9?q=80&w=800&auto=format&fit=crop",
+      alt: "Quesadilla con queso derretido cortada a la mitad",
+      emoji: "🧀"
+    },
+    {
+      id: "refresco",
+      name: "Refresco",
+      desc: "Bien helado para bajarle al picor. Sabores surtidos disponibles, pregunta por el del día.",
+      price: 20,
+      category: "bebidas",
+      img: "https://images.unsplash.com/photo-1598038990523-32bcaa29f679?q=80&w=800&auto=format&fit=crop",
+      alt: "Lata de refresco fría",
+      emoji: "🥤"
+    },
+  ];
+
+  // ---------------------------------------------------------
+  // Estado
+  // ---------------------------------------------------------
+  const cart = {};             // { id: cantidad }
+  let currentFilter = "todos";
+  let selectedPayment = "Efectivo";
+
+  const money = (n) => `$${n.toFixed(2)}`;
+
+  // Si una foto de Unsplash no logra cargar (sin internet, red bloqueada, etc.)
+  // esta función la reemplaza por un placeholder degradado con el emoji del
+  // producto, para que la tarjeta nunca se vea "rota".
+  function imgFallback(img, emoji) {
+    img.onerror = null; // evita bucles si el placeholder también fallara
+    img.referrerPolicy = "";
+    img.src = "data:image/svg+xml;utf8," + encodeURIComponent(`
+      <svg xmlns="http://www.w3.org/2000/svg" width="800" height="450">
+        <defs>
+          <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#3a1206"/>
+            <stop offset="100%" stop-color="#1b0b04"/>
+          </linearGradient>
+        </defs>
+        <rect width="800" height="450" fill="url(#g)"/>
+        <text x="50%" y="54%" font-size="120" text-anchor="middle" dominant-baseline="middle">${emoji}</text>
+      </svg>
+    `);
+  }
+
+  // ---------------------------------------------------------
+  // Render del menú
+  // ---------------------------------------------------------
+  function cardTemplate(p) {
+    const qty = cart[p.id] || 0;
+    return `
+      <div class="product-card rounded-2xl overflow-hidden">
+        <div class="relative">
+          <img src="${p.img}" alt="${p.alt}" loading="lazy" referrerpolicy="no-referrer"
+            onerror="imgFallback(this,'${p.emoji}')"
+            class="w-full h-44 object-cover">
+          <div class="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
+          ${qty > 0 ? `<span class="absolute top-3 left-3 w-7 h-7 rounded-full bg-gold text-void font-display text-sm flex items-center justify-center shadow">${qty}</span>` : ""}
+        </div>
+        <div class="p-4">
+          <div class="flex items-start justify-between gap-3">
+            <h3 class="font-display text-2xl tracking-wide leading-none pt-1">${p.name}</h3>
+            <span class="font-display text-2xl text-gold shrink-0">$${p.price}</span>
+          </div>
+          <p class="text-sm text-cream/60 mt-1.5 leading-snug">${p.desc}</p>
+          <div class="flex items-center justify-between mt-3">
+            <span class="text-[10px] uppercase tracking-widest text-ember font-semibold">c/u</span>
+            <div class="flex items-center gap-3">
+              <button data-action="dec" data-id="${p.id}" aria-label="Quitar ${p.name}"
+                class="w-8 h-8 rounded-full border border-gold/30 text-gold text-lg font-bold flex items-center justify-center active:scale-90 transition">−</button>
+              <span class="w-5 text-center font-display text-lg">${qty}</span>
+              <button data-action="inc" data-id="${p.id}" aria-label="Agregar ${p.name}"
+                class="w-8 h-8 rounded-full bg-gradient-to-br from-ember to-gold text-void text-lg font-bold flex items-center justify-center active:scale-90 transition">+</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderMenu() {
+    const list = document.getElementById("menu-list");
+    const filtered = products.filter(p => currentFilter === "todos" || p.category === currentFilter);
+    list.innerHTML = filtered.map(cardTemplate).join("");
+  }
+
+  // ---------------------------------------------------------
+  // Carrito
+  // ---------------------------------------------------------
+  function updateQty(id, delta) {
+    cart[id] = Math.max(0, (cart[id] || 0) + delta);
+    renderMenu();
+    updateCartBar();
+  }
+
+  function cartTotals() {
+    let count = 0, total = 0;
+    products.forEach(p => {
+      const qty = cart[p.id] || 0;
+      count += qty;
+      total += qty * p.price;
+    });
+    return { count, total };
+  }
+
+  function updateCartBar() {
+    const { count, total } = cartTotals();
+    const bar = document.getElementById("cart-bar");
+    document.getElementById("cart-count").textContent = count;
+    document.getElementById("cart-total").textContent = money(total);
+
+    if (count > 0) {
+      bar.classList.remove("cart-hidden");
+      bar.classList.remove("bump");
+      void bar.offsetWidth; // reinicia la animación
+      bar.classList.add("bump");
+    } else {
+      bar.classList.add("cart-hidden");
+      closeCart();
+    }
+  }
+
+  function renderCartItems() {
+    const container = document.getElementById("cart-items");
+    const items = products.filter(p => (cart[p.id] || 0) > 0);
+
+    if (items.length === 0) {
+      container.innerHTML = `<p class="text-sm text-cream/40 text-center py-4">Tu carrito está vacío.</p>`;
+      return;
+    }
+
+    container.innerHTML = items.map(p => {
+      const qty = cart[p.id];
+      const subtotal = qty * p.price;
+      return `
+        <div class="flex items-center justify-between text-sm">
+          <span class="text-cream/80">${qty}× ${p.name}</span>
+          <span class="text-gold font-semibold">${money(subtotal)}</span>
+        </div>
+      `;
+    }).join("");
+  }
+
+  // ---------------------------------------------------------
+  // Modal del carrito
+  // ---------------------------------------------------------
+  function openCart() {
+    if (cartTotals().count === 0) return;
+    renderCartItems();
+    const { total } = cartTotals();
+    document.getElementById("cart-modal-total").textContent = `${money(total)} MXN`;
+    document.getElementById("cart-modal").classList.add("open");
+    document.body.style.overflow = "hidden";
+  }
+
+  function closeCart() {
+    document.getElementById("cart-modal").classList.remove("open");
+    document.body.style.overflow = "";
+  }
+
+  // ---------------------------------------------------------
+  // Categorías
+  // ---------------------------------------------------------
+  function setFilter(filter) {
+    currentFilter = filter;
+    document.querySelectorAll(".cat-chip").forEach(btn => {
+      btn.classList.toggle("active", btn.dataset.filter === filter);
+    });
+    renderMenu();
+  }
+
+  // ---------------------------------------------------------
+  // Método de pago
+  // ---------------------------------------------------------
+  function setPayment(method, btn) {
+    selectedPayment = method;
+    document.querySelectorAll(".pay-chip").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+  }
+
+  // ---------------------------------------------------------
+  // Validación simple de campos
+  // ---------------------------------------------------------
+  function markInvalid(el) {
+    el.classList.add("shake");
+    el.style.boxShadow = "0 0 0 2px #E23E1B";
+    setTimeout(() => el.classList.remove("shake"), 500);
+  }
+  function markValid(el) {
+    el.style.boxShadow = "";
+  }
+
+  // ---------------------------------------------------------
+  // Construcción del mensaje de WhatsApp
+  // ---------------------------------------------------------
+  function buildWhatsAppMessage(nombre, direccion) {
+    const items = products.filter(p => (cart[p.id] || 0) > 0);
+    const { total } = cartTotals();
+
+    const lineasPedido = items.map(p => {
+      const qty = cart[p.id];
+      const subtotal = qty * p.price;
+      return `▪️ ${qty}x ${p.name} — ${money(subtotal)}`;
+    }).join("\n");
+
+    return [
+      "🌮 *TAQUERÍA EL INFIERNO* 🔥",
+      "*¡Nuevo pedido desde el menú digital!*",
+      "",
+      `👤 *Cliente:* ${nombre}`,
+      `📍 *Dirección:* ${direccion}`,
+      `💳 *Pago:* ${selectedPayment}`,
+      "",
+      "🧾 *Detalle del pedido:*",
+      lineasPedido,
+      "",
+      `🔥 *Total a pagar: ${money(total)} MXN*`,
+      "",
+      "¡Gracias por tu pedido! En un momento lo confirmamos por este mismo chat 🙌"
+    ].join("\n");
+  }
+
+  function confirmOrder() {
+    const nombreEl = document.getElementById("input-nombre");
+    const direccionEl = document.getElementById("input-direccion");
+    const nombre = nombreEl.value.trim();
+    const direccion = direccionEl.value.trim();
+
+    let valid = true;
+    if (!nombre) { markInvalid(nombreEl); valid = false; } else { markValid(nombreEl); }
+    if (!direccion) { markInvalid(direccionEl); valid = false; } else { markValid(direccionEl); }
+    if (cartTotals().count === 0) { valid = false; }
+    if (!valid) return;
+
+    const mensaje = buildWhatsAppMessage(nombre, direccion);
+    const url = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(mensaje)}`;
+    window.open(url, "_blank");
+  }
+
+  // ---------------------------------------------------------
+  // Listeners
+  // ---------------------------------------------------------
+  document.getElementById("menu-list").addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-action]");
+    if (!btn) return;
+    updateQty(btn.dataset.id, btn.dataset.action === "inc" ? 1 : -1);
+  });
+
+  document.getElementById("category-bar").addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-filter]");
+    if (!btn) return;
+    setFilter(btn.dataset.filter);
+  });
+
+  document.getElementById("pay-options").addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-pay]");
+    if (!btn) return;
+    setPayment(btn.dataset.pay, btn);
+  });
+
+  document.getElementById("cart-bar").addEventListener("click", openCart);
+
+  // ---------------------------------------------------------
+  // Inicio
+  // ---------------------------------------------------------
+  renderMenu();
+  updateCartBar();
+</script>
+</body>
+</html>
